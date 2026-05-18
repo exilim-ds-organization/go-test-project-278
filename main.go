@@ -8,8 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -46,28 +46,43 @@ func listLinks(db *generated.Queries) gin.HandlerFunc {
 		offset := 0
 		idx0 := 0
 		idx1 := 10
-		// считываем параметры из тела запроса
-		str := strings.Index(rangeLinks, "[")
-		end := strings.Index(rangeLinks, "]")
+		// задаём регулярное выражение для поиска всех чисел
+		re := regexp.MustCompile(`\d+`)
 		// получаем лимит записей на странице и сдвиг для вывода записей
+		numRange := re.FindAllString(rangeLinks, -1)
 		// проверяем корректность ввода данных
-		if str != -1 && end != -1 && int(rangeLinks[str+1]) >= 0 && int(rangeLinks[str-1]) >= 0 {
-			idx0 = int(rangeLinks[str+1])
-			idx1 = int(rangeLinks[str-1])
-			if idx1 > idx0 {
-				limit = idx1 - idx0
-				offset = idx0
-			}
-			if idx0 == idx1 {
-				limit = 1
-				offset = idx0
-			}
-			if idx0 > idx1 {
-				idx0 = 0
-				idx1 = 10
-				limit = 10
-				offset = 0
-			}
+		if len(numRange) != 2 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "the range must be specified by two numbers, example: [1–4]"})
+			return
+		}
+		idx0, err := strconv.Atoi(numRange[0])
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid range value 1"})
+			return
+		}
+		idx1, err = strconv.Atoi(numRange[1])
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid range value 2"})
+			return
+		}
+		// проверка на положительные значения
+		if idx0 < 0 || idx1 < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "the range value must be positive"})
+			return
+		}
+		// если первый индекс меньше второго
+		if idx0 < idx1 {
+			limit = idx1 - idx0
+			offset = idx0
+		}
+		// если индексы равны
+		if idx0 == idx1 {
+			limit = 1
+			offset = idx0
+		}
+		if idx0 > idx1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "range values ​​are specified incorrectly"})
+			return
 		}
 		// ограничение максимального числа записей на странице
 		if limit > 20 {
