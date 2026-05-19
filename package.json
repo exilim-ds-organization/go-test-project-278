@@ -1,0 +1,25 @@
+{
+  "name": "go-project-278",
+  "version": "1.0.0",
+  "description": "[![Actions Status](https://github.com/Lirikman/go-project-278/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/Lirikman/go-project-278/actions)",
+  "main": "index.js",
+  "scripts": {
+    "backend": "go run main.go",
+    "frontend": "npx start-hexlet-url-shortener-frontend",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lirikman/go-project-278.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Lirikman/go-project-278/issues"
+  },
+  "homepage": "https://github.com/Lirikman/go-project-278#readme",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

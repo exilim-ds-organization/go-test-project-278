@@ -14,6 +14,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -26,6 +27,13 @@ func setupRouter() *gin.Engine {
 			"message": "pong",
 		})
 	})
+	// настройка политики разрешений
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{"http://localhost:5173/"}
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE"}
+	config.AllowHeaders = []string{"Origin", "Content-Type"}
+	config.ExposeHeaders = []string{"Content-Range"}
+	router.Use(cors.New(config))
 	// подключаем монитор просмотра ошибок
 	router.Use(sentrygin.New(sentrygin.Options{}))
 	// подключаем инструмент восстановления сбоев
@@ -95,8 +103,9 @@ func listLinks(db *generated.Queries) gin.HandlerFunc {
 			return
 		}
 		headerVal := fmt.Sprintf("links: %d-%d/%d", idx0, idx1, count)
-		c.JSON(http.StatusOK, links)
 		c.Header("Content-Range", headerVal)
+		c.JSON(http.StatusOK, links)
+
 	}
 }
 
