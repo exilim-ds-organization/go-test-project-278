@@ -156,8 +156,8 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 			// получаем текущий ID записи
 			lastID := lastRec.ID + 1
 			// кодируем в Base62
-			shortName := base62.Encode(lastID)
-			link.ShortName = pgtype.Text{String: shortName, Valid: true}
+			shortName := base62.FormatInt(lastID)
+			link.ShortName = pgtype.Text{String: string(shortName), Valid: true}
 		}
 		// создаём короткое имя ссылки
 		shortUrl := "https://go-project-278-yoao.onrender.com/r/" + shortName
