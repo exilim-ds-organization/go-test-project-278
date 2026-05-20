@@ -154,13 +154,13 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 				return
 			}
 			// получаем текущий ID записи
-			lastID := lastRec.ID + 1
+			lastID := fmt.Sprintf("%d", lastRec.ID+1)
 			// кодируем в Base62
-			shortName := base62.FormatInt(lastID)
+			shortName = base62.EncodeToString([]byte(lastID))
 			link.ShortName = pgtype.Text{String: string(shortName), Valid: true}
 		}
 		// создаём короткое имя ссылки
-		shortUrl := "https://go-project-278-yoao.onrender.com/r/" + shortName
+		shortUrl := fmt.Sprintf("https://go-project-278-yoao.onrender.com/r/%s", shortName)
 		shortUrlTxt := pgtype.Text{String: shortUrl, Valid: true}
 		// cоздаём запись
 		res, err := db.CreateLink(c, link)
