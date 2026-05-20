@@ -15,11 +15,16 @@ original_url, short_name
 ) VALUES (
 $1, $2 
 )
-RETURNING id;
+RETURNING id, original_url, short_name, short_url, created_at;
 
 -- name: UpdateLink :exec
 UPDATE links
 SET original_url = $2, short_name = $3
+WHERE id = $1;
+
+-- name: CreateShortName :exec
+UPDATE links
+SET short_url = $2
 WHERE id = $1;
 
 -- name: DeleteLink :exec
@@ -28,3 +33,8 @@ WHERE id = $1;
 
 -- name: CounterLinks :one
 SELECT COUNT(*) FROM links;
+
+-- name: LastLink :one
+SELECT * FROM links
+ORDER BY id DESC
+LIMIT 1;

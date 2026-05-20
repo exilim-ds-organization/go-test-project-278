@@ -28,7 +28,7 @@ original_url, short_name
 ) VALUES (
 $1, $2 
 )
-RETURNING id
+RETURNING id, original_url, short_name, short_url, created_at
 `
 
 type CreateLinkParams struct {
@@ -36,11 +36,33 @@ type CreateLinkParams struct {
 	ShortName   pgtype.Text `json:"short_name"`
 }
 
-func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (int64, error) {
+func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (Link, error) {
 	row := q.db.QueryRow(ctx, createLink, arg.OriginalUrl, arg.ShortName)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
+	var i Link
+	err := row.Scan(
+		&i.ID,
+		&i.OriginalUrl,
+		&i.ShortName,
+		&i.ShortUrl,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createShortName = `-- name: CreateShortName :exec
+UPDATE links
+SET short_url = $2
+WHERE id = $1
+`
+
+type CreateShortNameParams struct {
+	ID       int64       `json:"id"`
+	ShortUrl pgtype.Text `json:"short_url"`
+}
+
+func (q *Queries) CreateShortName(ctx context.Context, arg CreateShortNameParams) error {
+	_, err := q.db.Exec(ctx, createShortName, arg.ID, arg.ShortUrl)
+	return err
 }
 
 const deleteLink = `-- name: DeleteLink :exec
@@ -74,6 +96,25 @@ func (q *Queries) GetLink(ctx context.Context, id int64) (GetLinkRow, error) {
 		&i.OriginalUrl,
 		&i.ShortName,
 		&i.ShortUrl,
+	)
+	return i, err
+}
+
+const lastLink = `-- name: LastLink :one
+SELECT id, original_url, short_name, short_url, created_at FROM links
+ORDER BY id DESC
+LIMIT 1
+`
+
+func (q *Queries) LastLink(ctx context.Context) (Link, error) {
+	row := q.db.QueryRow(ctx, lastLink)
+	var i Link
+	err := row.Scan(
+		&i.ID,
+		&i.OriginalUrl,
+		&i.ShortName,
+		&i.ShortUrl,
+		&i.CreatedAt,
 	)
 	return i, err
 }

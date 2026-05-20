@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -16,7 +17,9 @@ import (
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jxskiss/base62"
 )
 
 // создание маршрутизатора Gin
@@ -117,12 +120,64 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		id, err := db.CreateLink(c, link)
+		origUrlTxt := link.OriginalUrl
+		var origUrl string
+		// проверка на ввод url адреса
+		if origUrlTxt.Valid {
+			origUrl = origUrlTxt.String
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "URL address cannot be empty"})
+			return
+		}
+		// проверка корректности ввода адреса
+		_, err := url.ParseRequestURI(origUrl)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "incorrect URL entered"})
+			return
+		}
+		// проверка длины адреса
+		if len(origUrl) < 10 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "link is quite short"})
+			return
+		}
+		shortNameTxt := link.ShortName
+		var shortName string
+		// проверка ввода короткого имени
+		if shortNameTxt.Valid {
+			shortName = shortNameTxt.String
+		}
+		// если имя не введено, то генерируем имя
+		if shortName == "" {
+			lastRec, err := db.LastLink(c)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "unable to get the latest entry"})
+				return
+			}
+			// получаем текущий ID записи
+			lastID := lastRec.ID + 1
+			// кодируем в Base62
+			shortName := base62.Encode(lastID)
+			link.ShortName = pgtype.Text{String: shortName, Valid: true}
+		}
+		// создаём короткое имя ссылки
+		shortUrl := "https://go-project-278-yoao.onrender.com/r/" + shortName
+		shortUrlTxt := pgtype.Text{String: shortUrl, Valid: true}
+		// cоздаём запись
+		res, err := db.CreateLink(c, link)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusCreated, id)
+		// добавляем короткую ссылку к записи
+		var shortNameParams generated.CreateShortNameParams
+		shortNameParams.ID = res.ID
+		shortNameParams.ShortUrl = shortUrlTxt
+		err = db.CreateShortName(c, shortNameParams)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error adding short link to post"})
+			return
+		}
+		c.JSON(http.StatusCreated, res)
 	}
 }
 
