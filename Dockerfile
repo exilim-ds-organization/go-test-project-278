@@ -43,6 +43,6 @@ RUN chmod +x /app/bin/run.sh
 
 COPY Caddyfile /etc/caddy/Caddyfile
 
-EXPOSE 8080
+EXPOSE 80
 
 CMD ["/app/bin/run.sh"]

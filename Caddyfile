@@ -1,4 +1,4 @@
-:443
+:80
 
 # Статика из /app/public
 root * /app/public
