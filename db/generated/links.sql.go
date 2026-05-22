@@ -62,14 +62,15 @@ func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (Link, e
 
 const createLinkVisits = `-- name: CreateLinkVisits :one
 INSERT INTO link_visits (
-ip, user_agent, referer, status
+link_id, ip, user_agent, referer, status
 ) VALUES (
-$1, $2, $3, $4
+$1, $2, $3, $4, $5
 )
 RETURNING id
 `
 
 type CreateLinkVisitsParams struct {
+	LinkID    pgtype.Int8 `json:"link_id"`
 	Ip        pgtype.Text `json:"ip"`
 	UserAgent pgtype.Text `json:"user_agent"`
 	Referer   pgtype.Text `json:"referer"`
@@ -78,6 +79,7 @@ type CreateLinkVisitsParams struct {
 
 func (q *Queries) CreateLinkVisits(ctx context.Context, arg CreateLinkVisitsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, createLinkVisits,
+		arg.LinkID,
 		arg.Ip,
 		arg.UserAgent,
 		arg.Referer,
@@ -139,17 +141,22 @@ func (q *Queries) GetLink(ctx context.Context, id int64) (GetLinkRow, error) {
 	return i, err
 }
 
-const getOrigUrlFromCode = `-- name: GetOrigUrlFromCode :one
-SELECT original_url
+const getLinkFromCode = `-- name: GetLinkFromCode :one
+SELECT id, original_url
 FROM links 
 WHERE short_name = $1
 `
 
-func (q *Queries) GetOrigUrlFromCode(ctx context.Context, shortName pgtype.Text) (pgtype.Text, error) {
-	row := q.db.QueryRow(ctx, getOrigUrlFromCode, shortName)
-	var original_url pgtype.Text
-	err := row.Scan(&original_url)
-	return original_url, err
+type GetLinkFromCodeRow struct {
+	ID          int64       `json:"id"`
+	OriginalUrl pgtype.Text `json:"original_url"`
+}
+
+func (q *Queries) GetLinkFromCode(ctx context.Context, shortName pgtype.Text) (GetLinkFromCodeRow, error) {
+	row := q.db.QueryRow(ctx, getLinkFromCode, shortName)
+	var i GetLinkFromCodeRow
+	err := row.Scan(&i.ID, &i.OriginalUrl)
+	return i, err
 }
 
 const lastLink = `-- name: LastLink :one
@@ -172,7 +179,7 @@ func (q *Queries) LastLink(ctx context.Context) (Link, error) {
 }
 
 const listLinkVisits = `-- name: ListLinkVisits :many
-SELECT id, ip, user_agent, referer, status
+SELECT id, link_id, created_at, ip, user_agent, status
 FROM link_visits
 ORDER BY id
 LIMIT $1 OFFSET $2
@@ -184,11 +191,12 @@ type ListLinkVisitsParams struct {
 }
 
 type ListLinkVisitsRow struct {
-	ID        int64       `json:"id"`
-	Ip        pgtype.Text `json:"ip"`
-	UserAgent pgtype.Text `json:"user_agent"`
-	Referer   pgtype.Text `json:"referer"`
-	Status    pgtype.Int4 `json:"status"`
+	ID        int64              `json:"id"`
+	LinkID    pgtype.Int8        `json:"link_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	Ip        pgtype.Text        `json:"ip"`
+	UserAgent pgtype.Text        `json:"user_agent"`
+	Status    pgtype.Int4        `json:"status"`
 }
 
 func (q *Queries) ListLinkVisits(ctx context.Context, arg ListLinkVisitsParams) ([]ListLinkVisitsRow, error) {
@@ -202,9 +210,10 @@ func (q *Queries) ListLinkVisits(ctx context.Context, arg ListLinkVisitsParams) 
 		var i ListLinkVisitsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.LinkID,
+			&i.CreatedAt,
 			&i.Ip,
 			&i.UserAgent,
-			&i.Referer,
 			&i.Status,
 		); err != nil {
 			return nil, err

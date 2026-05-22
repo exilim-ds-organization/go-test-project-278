@@ -270,7 +270,7 @@ func redirectLink(db *generated.Queries) gin.HandlerFunc {
 		}
 		codeTxt := pgtype.Text{String: codeStr, Valid: true}
 		// получаем original_url из БД по введёному имени
-		origUrl, err := db.GetOrigUrlFromCode(c, codeTxt)
+		codeParams, err := db.GetLinkFromCode(c, codeTxt)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error of receiving the original url": err.Error()})
 			return
@@ -279,8 +279,9 @@ func redirectLink(db *generated.Queries) gin.HandlerFunc {
 		var visitParams generated.CreateLinkVisitsParams
 		userAgent := c.Request.UserAgent()
 		ip := c.ClientIP()
-		referer := c.GetHeader("Referer")
-		currentStatus := c.Writer.Status()
+		referer := c.Request.Referer()
+		currentStatus := http.StatusFound
+		visitParams.LinkID = pgtype.Int8{Int64: codeParams.ID, Valid: true}
 		visitParams.UserAgent = pgtype.Text{String: userAgent, Valid: true}
 		visitParams.Ip = pgtype.Text{String: ip, Valid: true}
 		visitParams.Referer = pgtype.Text{String: referer, Valid: true}
@@ -291,7 +292,7 @@ func redirectLink(db *generated.Queries) gin.HandlerFunc {
 			return
 		}
 		// перенапраявляем на оригинальный адрес
-		c.Redirect(http.StatusMovedPermanently, origUrl.String)
+		c.Redirect(http.StatusFound, codeParams.OriginalUrl.String)
 		// прерываем обработку запроса
 		c.Abort()
 	}
