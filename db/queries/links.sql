@@ -38,3 +38,25 @@ SELECT COUNT(*) FROM links;
 SELECT * FROM links
 ORDER BY id DESC
 LIMIT 1;
+
+-- name: CreateLinkVisits :one
+INSERT INTO link_visits (
+ip, user_agent, referer, status
+) VALUES (
+$1, $2, $3, $4
+)
+RETURNING id;
+
+-- name: ListLinkVisits :many
+SELECT id, ip, user_agent, referer, status
+FROM link_visits
+ORDER BY id
+LIMIT $1 OFFSET $2;
+
+-- name: GetOrigUrlFromCode :one
+SELECT original_url
+FROM links 
+WHERE short_name = $1;
+
+-- name: CounterVisits :one
+SELECT COUNT(*) FROM link_visits;

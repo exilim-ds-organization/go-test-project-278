@@ -25,11 +25,10 @@ import (
 // создание маршрутизатора Gin
 func setupRouter() *gin.Engine {
 	router := gin.Default()
-	router.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-	})
+	// включаем поддержку Cloudflare
+	router.TrustedPlatform = gin.PlatformCloudflare
+	router.ForwardedByClientIP = true
+	router.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 	// настройка политики разрешений
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"http://localhost:5173/"}
@@ -43,6 +42,12 @@ func setupRouter() *gin.Engine {
 	router.Use(gin.Recovery())
 	// подключаем логгер
 	router.Use(gin.Logger())
+	// задаём стандартный маршрут '/ping'
+	router.GET("/ping", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "pong",
+		})
+	})
 	return router
 }
 
@@ -51,9 +56,9 @@ func listLinks(db *generated.Queries) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var paginParams generated.ListLinksParams
 		// получаем параметры для пагинации
-		rangeLinks := c.DefaultQuery("range", "[0,20]")
+		rangeLinks := c.DefaultQuery("range", "[0,50]")
 		// задаём параметры по умолчанию
-		limit := 20
+		limit := 50
 		offset := 0
 		// задаём регулярное выражение для поиска всех чисел
 		re := regexp.MustCompile(`\d+`)
@@ -86,8 +91,8 @@ func listLinks(db *generated.Queries) gin.HandlerFunc {
 			return
 		}
 		// ограничение максимального числа записей на странице
-		if limit > 20 {
-			limit = 20
+		if limit > 50 {
+			limit = 50
 		}
 		paginParams.Limit = int32(limit)
 		paginParams.Offset = int32(offset)
@@ -157,7 +162,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 			lastID := fmt.Sprintf("%d", lastRec.ID+1)
 			// кодируем в Base62
 			shortName = base62.EncodeToString([]byte(lastID))
-			link.ShortName = pgtype.Text{String: string(shortName), Valid: true}
+			link.ShortName = pgtype.Text{String: shortName, Valid: true}
 		}
 		// создаём короткое имя ссылки
 		shortUrl := fmt.Sprintf("https://go-project-278-yoao.onrender.com/r/%s", shortName)
@@ -254,10 +259,113 @@ func deleteLink(db *generated.Queries) gin.HandlerFunc {
 	}
 }
 
-func main() {
-	// подключаемся с БД
-	var err error
+// перенаправление по shot_name на original_url
+func redirectLink(db *generated.Queries) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		codeStr := c.Query("code")
+		// проверка корректности ввода
+		if codeStr == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "short name cannot be empty"})
+			return
+		}
+		codeTxt := pgtype.Text{String: codeStr, Valid: true}
+		// получаем original_url из БД по введёному имени
+		origUrl, err := db.GetOrigUrlFromCode(c, codeTxt)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "unable to obtain original url"})
+			return
+		}
+		// добавляем запись о посещении в БД
+		var visitParams generated.CreateLinkVisitsParams
+		userAgent := c.GetHeader("User-Agent")
+		ip := c.ClientIP()
+		referer := c.Request.Header.Get("Referer")
+		currentStatus := c.Writer.Status()
+		visitParams.UserAgent = pgtype.Text{String: userAgent, Valid: true}
+		visitParams.Ip = pgtype.Text{String: ip, Valid: true}
+		visitParams.Referer = pgtype.Text{String: referer, Valid: true}
+		visitParams.Status = pgtype.Int4{Int32: int32(currentStatus), Valid: true}
+		_, err = db.CreateLinkVisits(c, visitParams)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"create link visits": "error adding visit record"})
+			return
+		}
+		// перенапраявляем на оригинальный адрес
+		c.Redirect(http.StatusMovedPermanently, origUrl.String)
+		// прерываем обработку запроса
+		c.Abort()
+	}
+}
 
+// получение статистики
+func linkVisits(db *generated.Queries) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var paginParams generated.ListLinkVisitsParams
+		// получаем параметры для пагинации
+		rangeLinks := c.DefaultQuery("range", "[0,50]")
+		// задаём параметры по умолчанию
+		limit := 50
+		offset := 0
+		// задаём регулярное выражение для поиска всех чисел
+		re := regexp.MustCompile(`\d+`)
+		// получаем лимит записей на странице и сдвиг для вывода записей
+		numRange := re.FindAllString(rangeLinks, -1)
+		// проверяем корректность ввода данных
+		if len(numRange) != 2 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "the range must be specified by two numbers, example: [1,4]"})
+			return
+		}
+		idx0, _ := strconv.Atoi(numRange[0])
+		idx1, _ := strconv.Atoi(numRange[1])
+		// проверка на положительные значения
+		if idx0 < 0 || idx1 < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "the range value must be positive"})
+			return
+		}
+		// если первый индекс меньше второго
+		if idx0 < idx1 {
+			limit = idx1 - idx0
+			offset = idx0
+		}
+		// если индексы равны
+		if idx0 == idx1 {
+			limit = 1
+			offset = idx0
+		}
+		if idx0 > idx1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "range values ​​are specified incorrectly"})
+			return
+		}
+		// ограничение максимального числа записей на странице
+		if limit > 50 {
+			limit = 50
+		}
+		paginParams.Limit = int32(limit)
+		paginParams.Offset = int32(offset)
+		// получаем все записи
+		links, err := db.ListLinkVisits(c, paginParams)
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "no visitor records found"})
+			return
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"get link visits": "database error"})
+			return
+		}
+		count, err := db.CounterVisits(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "unable to count the number of records"})
+			return
+		}
+		headerVal := fmt.Sprintf("links: %d-%d/%d", idx0, idx1, count)
+		c.Header("Content-Range", headerVal)
+		c.JSON(http.StatusOK, links)
+	}
+}
+
+func main() {
+	// подулючаемся к БД
+	var err error
 	// Инициализация пула соединений
 	conn, err := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
 	if err != nil {
@@ -278,12 +386,16 @@ func main() {
 
 	// создаём маршрутизатор
 	r := setupRouter()
+
 	// регистрируем маршруты
 	r.GET("api/links", listLinks(queries))
 	r.GET("api/links/:id", getLinkFromId(queries))
+	r.GET("/api/link_visits", linkVisits(queries))
+	r.GET("/r/:code", redirectLink(queries))
 	r.POST("api/links", createLink(queries))
 	r.PUT("api/links/:id", updateLink(queries))
 	r.DELETE("api/links/:id", deleteLink(queries))
+
 	// запускаем сервер на порту 8080
 	r.Run(":8080")
 }
