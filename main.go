@@ -262,7 +262,7 @@ func deleteLink(db *generated.Queries) gin.HandlerFunc {
 // перенаправление по shot_name на original_url
 func redirectLink(db *generated.Queries) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		codeStr := c.Query("code")
+		codeStr := c.Param("code")
 		// проверка корректности ввода
 		if codeStr == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "short name cannot be empty"})
