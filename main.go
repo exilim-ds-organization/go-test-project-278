@@ -272,14 +272,14 @@ func redirectLink(db *generated.Queries) gin.HandlerFunc {
 		// получаем original_url из БД по введёному имени
 		origUrl, err := db.GetOrigUrlFromCode(c, codeTxt)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "unable to obtain original url"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error of receiving the original url": err.Error()})
 			return
 		}
 		// добавляем запись о посещении в БД
 		var visitParams generated.CreateLinkVisitsParams
-		userAgent := c.GetHeader("User-Agent")
+		userAgent := c.Request.UserAgent()
 		ip := c.ClientIP()
-		referer := c.Request.Header.Get("Referer")
+		referer := c.GetHeader("Referer")
 		currentStatus := c.Writer.Status()
 		visitParams.UserAgent = pgtype.Text{String: userAgent, Valid: true}
 		visitParams.Ip = pgtype.Text{String: ip, Valid: true}
@@ -287,7 +287,7 @@ func redirectLink(db *generated.Queries) gin.HandlerFunc {
 		visitParams.Status = pgtype.Int4{Int32: int32(currentStatus), Valid: true}
 		_, err = db.CreateLinkVisits(c, visitParams)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"create link visits": "error adding visit record"})
+			c.JSON(http.StatusInternalServerError, gin.H{"create link visits": err.Error()})
 			return
 		}
 		// перенапраявляем на оригинальный адрес
@@ -349,12 +349,12 @@ func linkVisits(db *generated.Queries) gin.HandlerFunc {
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"get link visits": "database error"})
+			c.JSON(http.StatusInternalServerError, gin.H{"get link visits": err.Error()})
 			return
 		}
 		count, err := db.CounterVisits(c)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "unable to count the number of records"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error of receiving the counter of visits": err.Error()})
 			return
 		}
 		headerVal := fmt.Sprintf("links: %d-%d/%d", idx0, idx1, count)
