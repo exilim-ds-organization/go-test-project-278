@@ -203,7 +203,7 @@ func updateLink(db *generated.Queries) gin.HandlerFunc {
 		}
 		res := db.UpdateLink(c, updLink)
 		if res != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": res.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, res)
@@ -281,7 +281,7 @@ func redirectLink(db *generated.Queries) gin.HandlerFunc {
 		ip := c.ClientIP()
 		referer := c.Request.Referer()
 		currentStatus := http.StatusFound
-		visitParams.LinkID = pgtype.Int8{Int64: codeParams.ID, Valid: true}
+		visitParams.LinkID = pgtype.Int4{Int32: int32(codeParams.ID), Valid: true}
 		visitParams.UserAgent = pgtype.Text{String: userAgent, Valid: true}
 		visitParams.Ip = pgtype.Text{String: ip, Valid: true}
 		visitParams.Referer = pgtype.Text{String: referer, Valid: true}
