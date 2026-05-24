@@ -45,7 +45,7 @@ link_id, ip, user_agent, referer, status
 ) VALUES (
 $1, $2, $3, $4, $5
 )
-RETURNING id;
+RETURNING id, link_id, ip, user_agent, referer, status, created_at;
 
 -- name: ListLinkVisits :many
 SELECT id, link_id, created_at, ip, user_agent, status

@@ -66,7 +66,7 @@ link_id, ip, user_agent, referer, status
 ) VALUES (
 $1, $2, $3, $4, $5
 )
-RETURNING id
+RETURNING id, link_id, ip, user_agent, referer, status, created_at
 `
 
 type CreateLinkVisitsParams struct {
@@ -77,7 +77,7 @@ type CreateLinkVisitsParams struct {
 	Status    pgtype.Int4 `json:"status"`
 }
 
-func (q *Queries) CreateLinkVisits(ctx context.Context, arg CreateLinkVisitsParams) (int64, error) {
+func (q *Queries) CreateLinkVisits(ctx context.Context, arg CreateLinkVisitsParams) (LinkVisit, error) {
 	row := q.db.QueryRow(ctx, createLinkVisits,
 		arg.LinkID,
 		arg.Ip,
@@ -85,9 +85,17 @@ func (q *Queries) CreateLinkVisits(ctx context.Context, arg CreateLinkVisitsPara
 		arg.Referer,
 		arg.Status,
 	)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
+	var i LinkVisit
+	err := row.Scan(
+		&i.ID,
+		&i.LinkID,
+		&i.Ip,
+		&i.UserAgent,
+		&i.Referer,
+		&i.Status,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const createShortName = `-- name: CreateShortName :exec
