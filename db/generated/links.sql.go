@@ -62,15 +62,14 @@ func (q *Queries) CreateLink(ctx context.Context, arg CreateLinkParams) (Link, e
 
 const createLinkVisits = `-- name: CreateLinkVisits :one
 INSERT INTO link_visits (
-link_id, ip, user_agent, referer, status
+ip, user_agent, referer, status
 ) VALUES (
-$1, $2, $3, $4, $5
+$1, $2, $3, $4
 )
 RETURNING id, link_id, ip, user_agent, referer, status, created_at
 `
 
 type CreateLinkVisitsParams struct {
-	LinkID    pgtype.Int4 `json:"link_id"`
 	Ip        pgtype.Text `json:"ip"`
 	UserAgent pgtype.Text `json:"user_agent"`
 	Referer   pgtype.Text `json:"referer"`
@@ -79,7 +78,6 @@ type CreateLinkVisitsParams struct {
 
 func (q *Queries) CreateLinkVisits(ctx context.Context, arg CreateLinkVisitsParams) (LinkVisit, error) {
 	row := q.db.QueryRow(ctx, createLinkVisits,
-		arg.LinkID,
 		arg.Ip,
 		arg.UserAgent,
 		arg.Referer,
@@ -150,21 +148,16 @@ func (q *Queries) GetLink(ctx context.Context, id int64) (GetLinkRow, error) {
 }
 
 const getLinkFromCode = `-- name: GetLinkFromCode :one
-SELECT id, original_url
+SELECT original_url
 FROM links 
 WHERE short_name = $1
 `
 
-type GetLinkFromCodeRow struct {
-	ID          int64       `json:"id"`
-	OriginalUrl pgtype.Text `json:"original_url"`
-}
-
-func (q *Queries) GetLinkFromCode(ctx context.Context, shortName pgtype.Text) (GetLinkFromCodeRow, error) {
+func (q *Queries) GetLinkFromCode(ctx context.Context, shortName pgtype.Text) (pgtype.Text, error) {
 	row := q.db.QueryRow(ctx, getLinkFromCode, shortName)
-	var i GetLinkFromCodeRow
-	err := row.Scan(&i.ID, &i.OriginalUrl)
-	return i, err
+	var original_url pgtype.Text
+	err := row.Scan(&original_url)
+	return original_url, err
 }
 
 const lastLink = `-- name: LastLink :one
@@ -200,7 +193,7 @@ type ListLinkVisitsParams struct {
 
 type ListLinkVisitsRow struct {
 	ID        int64              `json:"id"`
-	LinkID    pgtype.Int4        `json:"link_id"`
+	LinkID    int64              `json:"link_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	Ip        pgtype.Text        `json:"ip"`
 	UserAgent pgtype.Text        `json:"user_agent"`

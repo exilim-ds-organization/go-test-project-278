@@ -41,9 +41,9 @@ LIMIT 1;
 
 -- name: CreateLinkVisits :one
 INSERT INTO link_visits (
-link_id, ip, user_agent, referer, status
+ip, user_agent, referer, status
 ) VALUES (
-$1, $2, $3, $4, $5
+$1, $2, $3, $4
 )
 RETURNING id, link_id, ip, user_agent, referer, status, created_at;
 
@@ -54,7 +54,7 @@ ORDER BY id
 LIMIT $1 OFFSET $2;
 
 -- name: GetLinkFromCode :one
-SELECT id, original_url
+SELECT original_url
 FROM links 
 WHERE short_name = $1;
 
