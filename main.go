@@ -357,7 +357,7 @@ func linkVisits(db *generated.Queries) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error of receiving the counter of visits": err.Error()})
 			return
 		}
-		headerVal := fmt.Sprintf("links: %d-%d/%d", idx0, idx1, count)
+		headerVal := fmt.Sprintf("link_visits: %d-%d/%d", idx0, idx1, count)
 		c.Header("Content-Range", headerVal)
 		c.JSON(http.StatusOK, links)
 	}
@@ -377,7 +377,7 @@ func main() {
 
 	// подключаем мониторинг ошибок
 	errSentry := sentry.Init(sentry.ClientOptions{
-		Dsn: "https://b81aac0d2c97f7e747a4fb8aeb0d72ea@o4511376473587712.ingest.de.sentry.io/4511376481189968",
+		Dsn: "https://0a6c355afb0d24bf54e562bffe603e94@o4511444391886848.ingest.de.sentry.io/4511444398047312",
 	})
 	if errSentry != nil {
 		log.Fatalf("sentry initialization failed: %s", errSentry)
