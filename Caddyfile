@@ -10,6 +10,4 @@ handle / {
 	file_server
 }
 
-https://go-project-278-yoao.onrender.com {
-	reverse_proxy localhost:8080
-}
+reverse_proxy localhost:8080
