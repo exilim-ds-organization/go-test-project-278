@@ -28,7 +28,12 @@ func setupRouter() *gin.Engine {
 	// включаем поддержку Cloudflare
 	router.TrustedPlatform = gin.PlatformCloudflare
 	router.ForwardedByClientIP = true
-	router.SetTrustedProxies([]string{"localhost", "127.0.0.1", "::1"})
+	// настраиваем доверенные прокси
+	proxies := []string{"127.0.0.1", "::1"}
+	err := router.SetTrustedProxies(proxies)
+	if err != nil {
+		log.Fatalf("error while setting up proxy")
+	}
 	// настройка политики разрешений
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"https://localhost:5173/"}
@@ -87,7 +92,8 @@ func listLinks(db *generated.Queries) gin.HandlerFunc {
 			offset = idx0
 		}
 		if idx0 > idx1 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "range values ​​are specified incorrectly"})
+			msg := "range values are specified incorrectly"
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 			return
 		}
 		// ограничение максимального числа записей на странице
@@ -128,7 +134,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		origUrl := link.OriginalUrl
 		// проверка на ввод url адреса
 		if origUrl == "" {
-			msg := fmt.Sprintf(`{"original_url": "URL address cannot be empty"}`)
+			msg := `{"original_url": "URL address cannot be empty"}`
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
@@ -142,7 +148,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		}
 		// проверка длины адреса
 		if len(origUrl) < 10 {
-			msg := fmt.Sprintf(`{"original_url": "URL address is quite short"}`)
+			msg := `{"original_url": "URL address is quite short"}`
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
@@ -154,7 +160,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		}
 		// проверка длины короткого имени
 		if shortName != "" && (len(shortName) < 3 || len(shortName) > 32) {
-			msg := fmt.Sprintf(`{"short_name": "length must be from 3 to 32 symbols"}`)
+			msg := `{"short_name": "length must be from 3 to 32 symbols"}`
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
@@ -162,7 +168,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		rec, _ := db.GetLinkFromCode(c, shortNameTxt)
 		emptyRec := generated.GetLinkFromCodeRow{}
 		if rec != emptyRec {
-			msg := fmt.Sprintf(`{"short_name": "short name already in use"}`)
+			msg := `{"short_name": "short name already in use"}`
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
@@ -170,7 +176,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		if shortName == "" {
 			lastRec, err := db.LastLink(c)
 			if err != nil {
-				msg := fmt.Sprintf(`{"last link": "unable to get the latest entry"}`)
+				msg := `{"last link": "unable to get the latest entry"}`
 				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 				return
 			}
@@ -190,7 +196,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		// cоздаём запись
 		res, err := db.CreateLink(c, link)
 		if err != nil {
-			msg := fmt.Sprintf(`{"create link": "unable to create records"}`)
+			msg := `{"create link": "unable to create records"}`
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
@@ -200,7 +206,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		shortNameParams.ShortUrl = shortUrlTxt
 		err = db.CreateShortName(c, shortNameParams)
 		if err != nil {
-			msg := fmt.Sprintf(`{"short_name": "unable to add short name to record"}`)
+			msg := `{"short_name": "unable to add short name to record"}`
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
@@ -215,7 +221,7 @@ func updateLink(db *generated.Queries) gin.HandlerFunc {
 		idStr := c.Param("id")
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			msg := fmt.Sprintf(`{"id": "incorrect id entered"}`)
+			msg := `{"id": "incorrect id entered"}`
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
@@ -226,7 +232,7 @@ func updateLink(db *generated.Queries) gin.HandlerFunc {
 		}
 		res := db.UpdateLink(c, updLink)
 		if res != nil {
-			msg := fmt.Sprintf(`{"update link": "unable to update data"}`)
+			msg := `{"update link": "unable to update data"}`
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
@@ -357,7 +363,8 @@ func listVisits(db *generated.Queries) gin.HandlerFunc {
 			offset = idx0
 		}
 		if idx0 > idx1 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "range values ​​are specified incorrectly"})
+			msg := "range values are specified incorrectly"
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 			return
 		}
 		// ограничение максимального числа записей на странице
@@ -421,5 +428,7 @@ func main() {
 	r.DELETE("api/links/:id", deleteLink(queries))
 
 	// запускаем сервер на порту 8080
-	r.Run(":8080")
+	if err := r.Run(":8080"); err != nil {
+		log.Fatalf("server startup error")
+	}
 }

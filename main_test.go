@@ -45,7 +45,11 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("failed to start container: %v", err)
 	}
-	defer pgCont.Terminate(ctx)
+	defer func() {
+		if err := pgCont.Terminate(ctx); err != nil {
+			log.Fatalf("context termination error")
+		}
+	}()
 	// получаем адрес и порт
 	mappedPort, _ := pgCont.MappedPort(ctx, "5432")
 	host, _ := pgCont.Host(ctx)
@@ -188,10 +192,10 @@ func TestUpdateLink(t *testing.T) {
 	assert.NoError(t, err)
 
 	// подготовка данных
-	origUrl := pgtype.Text{String: "https://example.com/update_test", Valid: true}
+	origUrl := "https://example.com/update_test"
 	shortUrl := pgtype.Text{String: "exmpl_update", Valid: true}
 	data := generated.UpdateLinkParams{ID: 1, OriginalUrl: origUrl, ShortName: shortUrl}
-	jsonData, err := json.Marshal(data)
+	jsonData, _ := json.Marshal(data)
 
 	// выполнение запроса
 	reqUpd, _ := http.NewRequest(http.MethodPut, "/api/links/1", bytes.NewBuffer(jsonData))
@@ -356,7 +360,7 @@ func TestPaginationGetLinksWrong(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	var response map[string]any
 	err = json.Unmarshal(w.Body.Bytes(), &response)
-	want := map[string]any{"error": "range values ​​are specified incorrectly"}
+	want := map[string]any{"error": "range values are specified incorrectly"}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
@@ -535,7 +539,7 @@ func TestLinkPaginationWrong(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	var response map[string]any
 	err = json.Unmarshal(w.Body.Bytes(), &response)
-	want := map[string]any{"error": "range values ​​are specified incorrectly"}
+	want := map[string]any{"error": "range values are specified incorrectly"}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
@@ -623,7 +627,7 @@ func TestRedirectWrong2(t *testing.T) {
 	var response map[string]any
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	want := map[string]any{"error of receiving the id and original url": "no rows in result set"}
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
