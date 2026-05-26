@@ -153,7 +153,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 			shortName = shortNameTxt.String
 		}
 		// проверка длины короткого имени
-		if len(shortName) < 3 || len(shortName) > 32 {
+		if shortName != "" && (len(shortName) < 3 || len(shortName) > 32) {
 			msg := fmt.Sprintf(`{"short_name": "length must be from 3 to 32 symbols"}`)
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
