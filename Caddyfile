@@ -1,4 +1,4 @@
-:443
+:80
 
 root * /app/public
 
@@ -10,8 +10,4 @@ handle / {
 	file_server
 }
 
-reverse_proxy localhost:8080 {
-	transport http {
-		tls_insecure_skip_verify
-	}
-}
+reverse_proxy localhost:8080
