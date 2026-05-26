@@ -10,7 +10,7 @@ import (
 
 type Link struct {
 	ID          int64              `json:"id"`
-	OriginalUrl pgtype.Text        `json:"original_url"`
+	OriginalUrl string             `json:"original_url"`
 	ShortName   pgtype.Text        `json:"short_name"`
 	ShortUrl    pgtype.Text        `json:"short_url"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`

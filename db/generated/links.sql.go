@@ -43,7 +43,7 @@ RETURNING id, original_url, short_name, short_url, created_at
 `
 
 type CreateLinkParams struct {
-	OriginalUrl pgtype.Text `json:"original_url"`
+	OriginalUrl string      `json:"original_url"`
 	ShortName   pgtype.Text `json:"short_name"`
 }
 
@@ -132,7 +132,7 @@ WHERE id = $1 LIMIT 1
 
 type GetLinkRow struct {
 	ID          int64       `json:"id"`
-	OriginalUrl pgtype.Text `json:"original_url"`
+	OriginalUrl string      `json:"original_url"`
 	ShortName   pgtype.Text `json:"short_name"`
 	ShortUrl    pgtype.Text `json:"short_url"`
 }
@@ -156,8 +156,8 @@ WHERE short_name = $1
 `
 
 type GetLinkFromCodeRow struct {
-	ID          int64       `json:"id"`
-	OriginalUrl pgtype.Text `json:"original_url"`
+	ID          int64  `json:"id"`
+	OriginalUrl string `json:"original_url"`
 }
 
 func (q *Queries) GetLinkFromCode(ctx context.Context, shortName pgtype.Text) (GetLinkFromCodeRow, error) {
@@ -248,7 +248,7 @@ type ListLinksParams struct {
 
 type ListLinksRow struct {
 	ID          int64       `json:"id"`
-	OriginalUrl pgtype.Text `json:"original_url"`
+	OriginalUrl string      `json:"original_url"`
 	ShortName   pgtype.Text `json:"short_name"`
 	ShortUrl    pgtype.Text `json:"short_url"`
 }
@@ -286,7 +286,7 @@ WHERE id = $1
 
 type UpdateLinkParams struct {
 	ID          int64       `json:"id"`
-	OriginalUrl pgtype.Text `json:"original_url"`
+	OriginalUrl string      `json:"original_url"`
 	ShortName   pgtype.Text `json:"short_name"`
 }
 

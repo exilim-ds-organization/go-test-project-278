@@ -122,27 +122,28 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var link generated.CreateLinkParams
 		if err := c.ShouldBindJSON(&link); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 			return
 		}
 		origUrlTxt := link.OriginalUrl
 		var origUrl string
 		// проверка на ввод url адреса
-		if origUrlTxt.Valid {
-			origUrl = origUrlTxt.String
-		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "URL address cannot be empty"})
+		if origUrlTxt == "" {
+			msg := fmt.Sprintf(`{"original_url": "URL address cannot be empty"}`)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
 		// проверка корректности ввода адреса
 		_, err := url.ParseRequestURI(origUrl)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "incorrect URL entered"})
+			msg := fmt.Sprintf(`{"original_url": "URL address incorrect"}`)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
 		// проверка длины адреса
 		if len(origUrl) < 10 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "link is quite short"})
+			msg := fmt.Sprintf(`{"original_url": "URL address is quite short"}`)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
 		shortNameTxt := link.ShortName
@@ -151,11 +152,26 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		if shortNameTxt.Valid {
 			shortName = shortNameTxt.String
 		}
+		// проверка длины короткого имени
+		if len(shortName) < 3 || len(shortName) > 32 {
+			msg := fmt.Sprintf(`{"short_name": "length must be from 3 to 32 symbols"}`)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+			return
+		}
+		// проверяем короткое имя на уникальность
+		rec, _ := db.GetLinkFromCode(c, shortNameTxt)
+		emptyRec := generated.GetLinkFromCodeRow{}
+		if rec != emptyRec {
+			msg := fmt.Sprintf(`{"short_name": "short name already in use"}`)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+			return
+		}
 		// если имя не введено, то генерируем имя
 		if shortName == "" {
 			lastRec, err := db.LastLink(c)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "unable to get the latest entry"})
+				msg := fmt.Sprintf(`{"last link": "unable to get the latest entry"}`)
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 				return
 			}
 			// получаем текущий ID записи
@@ -170,7 +186,8 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		// cоздаём запись
 		res, err := db.CreateLink(c, link)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			msg := fmt.Sprintf(`{"create link": "unable to create records"}`)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
 		// добавляем короткую ссылку к записи
@@ -179,7 +196,8 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		shortNameParams.ShortUrl = shortUrlTxt
 		err = db.CreateShortName(c, shortNameParams)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error adding short link to post"})
+			msg := fmt.Sprintf(`{"short_name": "unable to add short name to record"}`)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
 		c.JSON(http.StatusCreated, res)
@@ -193,17 +211,19 @@ func updateLink(db *generated.Queries) gin.HandlerFunc {
 		idStr := c.Param("id")
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			msg := fmt.Sprintf(`{"id": "incorrect id entered"}`)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
 		updLink.ID = id
 		if err := c.ShouldBindJSON(&updLink); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 			return
 		}
 		res := db.UpdateLink(c, updLink)
 		if res != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": res.Error()})
+			msg := fmt.Sprintf(`{"update link": "unable to update data"}`)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
 			return
 		}
 		c.JSON(http.StatusOK, res)
@@ -272,7 +292,7 @@ func redirectLink(db *generated.Queries) gin.HandlerFunc {
 		// получаем id, original_url из БД по введёному имени
 		codeParams, err := db.GetLinkFromCode(c, codeTxt)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error of receiving the id and original url": err.Error()})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error of receiving the id and original url": err.Error()})
 			return
 		}
 		// добавляем запись о посещении в БД
@@ -280,7 +300,7 @@ func redirectLink(db *generated.Queries) gin.HandlerFunc {
 		linkID := codeParams.ID
 		userAgent := c.Request.UserAgent()
 		ip := c.ClientIP()
-		referer := c.Request.Header.Get("Referer")
+		referer := c.Request.Referer()
 		currentStatus := http.StatusFound
 		visitParams.LinkID = linkID
 		visitParams.UserAgent = pgtype.Text{String: userAgent, Valid: true}
@@ -289,11 +309,11 @@ func redirectLink(db *generated.Queries) gin.HandlerFunc {
 		visitParams.Status = pgtype.Int4{Int32: int32(currentStatus), Valid: true}
 		_, err = db.CreateLinkVisits(c, visitParams)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"create link visits": err.Error()})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"create link visits": err.Error()})
 			return
 		}
 		// перенапраявляем на оригинальный адрес
-		c.Redirect(http.StatusFound, codeParams.OriginalUrl.String)
+		c.Redirect(http.StatusFound, codeParams.OriginalUrl)
 	}
 }
 
@@ -349,12 +369,12 @@ func listVisits(db *generated.Queries) gin.HandlerFunc {
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"get link visits": err.Error()})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"get link visits": err.Error()})
 			return
 		}
 		count, err := db.CounterVisits(c)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error of receiving the counter of visits": err.Error()})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error of receiving the counter of visits": err.Error()})
 			return
 		}
 		headerVal := fmt.Sprintf("link_visits: %d-%d/%d", idx0, idx1, count)
