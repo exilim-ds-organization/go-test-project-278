@@ -74,6 +74,7 @@ Creates a new link in the database.
 If a short name is not entered, the service generates one automatically.
 
 **POST** /api/links
+
 Request body:
 {
   "original_url": "https://example.com/main/auto/long-url",
@@ -119,6 +120,7 @@ Response code: 404 NotFound
 Change of short name and original address URL by ID
 
 **PUT** /api/links/:id
+
 Request body:
 {
   "original_url": "https://example.com/long-url2",
