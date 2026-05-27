@@ -50,7 +50,7 @@ func setupRouter() *gin.Engine {
 	// задаём стандартный маршрут '/ping'
 	router.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{
-			"message": "pong",
+			"data": "pong",
 		})
 	})
 	return router
@@ -134,8 +134,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		origUrl := link.OriginalUrl
 		// проверка на ввод url адреса
 		if origUrl == "" {
-			msg := `{"original_url": "URL address cannot be empty"}`
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"original_url": "URL address cannot be empty"})
 			return
 		}
 		// проверка корректности ввода адреса
@@ -148,8 +147,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		}
 		// проверка длины адреса
 		if len(origUrl) < 10 {
-			msg := `{"original_url": "URL address is quite short"}`
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"original_url": "URL address is quite short"})
 			return
 		}
 		shortNameTxt := link.ShortName
@@ -160,24 +158,21 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		}
 		// проверка длины короткого имени
 		if shortName != "" && (len(shortName) < 3 || len(shortName) > 32) {
-			msg := `{"short_name": "length must be from 3 to 32 symbols"}`
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"short_name": "length must be from 3 to 32 symbols"})
 			return
 		}
 		// проверяем короткое имя на уникальность
 		rec, _ := db.GetLinkFromCode(c, shortNameTxt)
 		emptyRec := generated.GetLinkFromCodeRow{}
 		if rec != emptyRec {
-			msg := `{"short_name": "short name already in use"}`
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"short_name": "short name already in use"})
 			return
 		}
 		// если имя не введено, то генерируем имя
 		if shortName == "" {
 			lastRec, err := db.LastLink(c)
 			if err != nil {
-				msg := `{"last link": "unable to get the latest entry"}`
-				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"last link": "unable to get the latest entry"})
 				return
 			}
 			// получаем текущий ID записи
@@ -196,8 +191,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		// cоздаём запись
 		res, err := db.CreateLink(c, link)
 		if err != nil {
-			msg := `{"create link": "unable to create records"}`
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"create link": "unable to create records"})
 			return
 		}
 		// добавляем короткую ссылку к записи
@@ -206,8 +200,7 @@ func createLink(db *generated.Queries) gin.HandlerFunc {
 		shortNameParams.ShortUrl = shortUrlTxt
 		err = db.CreateShortName(c, shortNameParams)
 		if err != nil {
-			msg := `{"short_name": "unable to add short name to record"}`
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"short_name": "unable to add short name to record"})
 			return
 		}
 		c.JSON(http.StatusCreated, res)
@@ -221,8 +214,13 @@ func updateLink(db *generated.Queries) gin.HandlerFunc {
 		idStr := c.Param("id")
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			msg := `{"id": "incorrect id entered"}`
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"id": "incorrect id entered"})
+			return
+		}
+		// проверка записи в БД
+		_, err = db.GetLink(c, id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"update link": "link does not exist"})
 			return
 		}
 		updLink.ID = id
@@ -232,8 +230,7 @@ func updateLink(db *generated.Queries) gin.HandlerFunc {
 		}
 		res := db.UpdateLink(c, updLink)
 		if res != nil {
-			msg := `{"update link": "unable to update data"}`
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": msg})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"update link": "unable to update data"})
 			return
 		}
 		c.JSON(http.StatusOK, res)
