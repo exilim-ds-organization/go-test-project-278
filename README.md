@@ -88,7 +88,7 @@ Request body:
   "short_name": "exmpl",
   "short_url": "https://go-project-278-yoao.onrender.com/r/exmpl"
 }
-
+```
 Response code: 201 Created
 
 ### Getting a link by ID
