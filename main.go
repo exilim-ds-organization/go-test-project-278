@@ -419,13 +419,13 @@ func main() {
 	r := setupRouter()
 
 	// регистрируем маршруты
-	r.GET("api/links", listLinks(queries))
-	r.GET("api/links/:id", getLinkFromId(queries))
+	r.GET("/api/links", listLinks(queries))
+	r.GET("/api/links/:id", getLinkFromId(queries))
 	r.GET("/api/link_visits", listVisits(queries))
 	r.GET("/r/:code", redirectLink(queries))
-	r.POST("api/links", createLink(queries))
-	r.PUT("api/links/:id", updateLink(queries))
-	r.DELETE("api/links/:id", deleteLink(queries))
+	r.POST("/api/links", createLink(queries))
+	r.PUT("/api/links/:id", updateLink(queries))
+	r.DELETE("/api/links/:id", deleteLink(queries))
 
 	// запускаем сервер на порту 8080
 	if err := r.Run(":8080"); err != nil {

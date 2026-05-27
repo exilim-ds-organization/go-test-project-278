@@ -69,16 +69,30 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("failed to create table link_visits: %v", err)
 	}
+	// добавление тестовых данных в таблицу links
+	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url', 'exmpl'), ('https://example.com/long-url1', 'exmpl1'), ('https://example.com/long-url2', 'exmpl2'), ('https://example.com/long-url3', 'exmpl3'), ('https://example.com/long-url4', 'exmpl4'), ('https://example.com/long-url5', 'exmpl5'), ('https://example.com/long-url6', 'exmpl6'), ('https://example.com/long-url7', 'exmpl7')")
+	if err != nil {
+		log.Fatalf("error adding data to table links: %v", err)
+	}
+	// фиксируем точное время для теста
+	fixedTime := time.Date(2026, 5, 26, 12, 35, 0, 0, time.UTC)
+
+	// добавление тестовых данных в таблицу link_visits
+	_, err = db.Exec(ctx, "INSERT INTO link_visits (link_id, ip, user_agent, referer, status, created_at) VALUES (1, '192.168.10.1', 'chrome', 'www.yanex.ru', 302, $1), (2, '192.168.10.2', 'chrome', 'www.mail.ru', 302, $1), (3, '192.168.10.3', 'mozilla', 'www.vk.com', 302, $1), (4, '192.168.10.4', 'opera', 'www.ya.ru', 302, $1), (5, '192.168.10.5', 'chrome', 'www.rambler.ru', 302, $1), (6, '192.168.10.6', 'opera', 'www.ersh.su', 302, $1)", fixedTime)
+	if err != nil {
+		log.Fatalf("error adding data to table link_visits: %v", err)
+	}
+
 	// инициализация Gin
 	queries := generated.New(db)
 	gin.SetMode(gin.TestMode)
 	router = setupRouter()
 	// регистрация маршрутов
 	router.GET("/api/links", listLinks(queries))
-	router.GET("api/links/:id", getLinkFromId(queries))
-	router.POST("api/links", createLink(queries))
-	router.PUT("api/links/:id", updateLink(queries))
-	router.DELETE("api/links/:id", deleteLink(queries))
+	router.GET("/api/links/:id", getLinkFromId(queries))
+	router.POST("/api/links", createLink(queries))
+	router.PUT("/api/links/:id", updateLink(queries))
+	router.DELETE("/api/links/:id", deleteLink(queries))
 	router.GET("/api/link_visits", listVisits(queries))
 	router.GET("/r/:code", redirectLink(queries))
 	os.Exit(m.Run())
@@ -111,521 +125,310 @@ func TestPingRouteTableDriven(t *testing.T) {
 }
 
 func TestGetLinksRight(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url1', 'exmpl1'), ('https://example.com/long-url2', 'exmpl2')")
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	req, _ := http.NewRequest(http.MethodGet, "/api/links", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response []map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	assert.Equal(t, 2, len(response))
+	assert.Equal(t, 8, len(response))
+}
+
+func TestLinkVisits(t *testing.T) {
+	// выполнение запроса
+	req, _ := http.NewRequest(http.MethodGet, "/api/link_visits", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	// проверка результатов
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response []map[string]any
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, 6, len(response))
 }
 
 func TestGetLinkFromIDRight(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url3', 'exmpl3'), ('https://example.com/long-url4', 'exmpl4')")
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	req, _ := http.NewRequest(http.MethodGet, "/api/links/2", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	want := map[string]any{"id": float64(2), "original_url": "https://example.com/long-url4", "short_name": "exmpl4", "short_url": nil}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	want := map[string]any{"id": float64(2), "original_url": "https://example.com/long-url1", "short_name": "exmpl1", "short_url": nil}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestGetLinkFromIDWrong(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url3', 'exmpl3'), ('https://example.com/long-url4', 'exmpl4')")
-	assert.NoError(t, err)
-
 	// выполнение запроса
-	req, _ := http.NewRequest(http.MethodGet, "/api/links/3", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/api/links/33", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := map[string]any{"error": "link not found"}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestUpdateLink(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url3', 'exmpl3'), ('https://example.com/long-url4', 'exmpl4')")
-	assert.NoError(t, err)
-
 	// подготовка данных
 	origUrl := "https://example.com/update_test"
 	shortUrl := pgtype.Text{String: "exmpl_update", Valid: true}
 	data := generated.UpdateLinkParams{ID: 1, OriginalUrl: origUrl, ShortName: shortUrl}
 	jsonData, _ := json.Marshal(data)
-
 	// выполнение запроса
 	reqUpd, _ := http.NewRequest(http.MethodPut, "/api/links/1", bytes.NewBuffer(jsonData))
 	wUpd := httptest.NewRecorder()
 	router.ServeHTTP(wUpd, reqUpd)
-
 	// получение обновлённой записи
 	req, _ := http.NewRequest(http.MethodGet, "/api/links/1", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := map[string]any{"id": float64(1), "original_url": "https://example.com/update_test", "short_name": "exmpl_update", "short_url": nil}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestDeleteLinkRight(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url4', 'exmpl4'), ('https://example.com/long-url5', 'exmpl5')")
-	assert.NoError(t, err)
-
-	// выполнение запроса на удаление записи
+	// выполнение запроса на удаление записи с id=2
 	reqDel, _ := http.NewRequest(http.MethodDelete, "/api/links/2", nil)
 	wDel := httptest.NewRecorder()
 	router.ServeHTTP(wDel, reqDel)
 	assert.Equal(t, http.StatusNoContent, wDel.Code)
-
-	// выполнение запроса на получение оставшейся записи
+	// выполнение запроса на получение всех записей
 	req, _ := http.NewRequest(http.MethodGet, "/api/links", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response []map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(response))
+	assert.Equal(t, 7, len(response))
+}
+
+func TestGetDeletedLink(t *testing.T) {
+	// выполнение запроса
+	req, _ := http.NewRequest(http.MethodGet, "/api/links/2", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	// проверка на ошибку NotFound
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	var response map[string]any
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	want := map[string]any{"error": "link not found"}
+	assert.NoError(t, err)
+	assert.Equal(t, want, response)
 }
 
 func TestDeleteLinkWrong(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url4', 'exmpl4'), ('https://example.com/long-url5', 'exmpl5')")
-	assert.NoError(t, err)
-
-	// выполнение запроса на удаление несуществующей записи
-	req, _ := http.NewRequest(http.MethodDelete, "/api/links/5", nil)
+	// выполнение запроса
+	req, _ := http.NewRequest(http.MethodDelete, "/api/links/45", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := map[string]any{"error": "the link does not exist"}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestPaginationGeLinksRight(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url', 'exmpl'), ('https://example.com/long-url1', 'exmpl1'), ('https://example.com/long-url2', 'exmpl2'), ('https://example.com/long-url3', 'exmpl3'), ('https://example.com/long-url4', 'exmpl4'), ('https://example.com/long-url5', 'exmpl5'), ('https://example.com/long-url6', 'exmpl6'), ('https://example.com/long-url7', 'exmpl7')")
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	r, _ := http.NewRequest(http.MethodGet, "/api/links?range=[0,2]", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response []map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	want := []map[string]any{{"id": float64(1), "original_url": "https://example.com/long-url", "short_name": "exmpl", "short_url": nil}, {"id": float64(2), "original_url": "https://example.com/long-url1", "short_name": "exmpl1", "short_url": nil}}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	want := []map[string]any{{"id": float64(1), "original_url": "https://example.com/update_test", "short_name": "exmpl_update", "short_url": nil}, {"id": float64(3), "original_url": "https://example.com/long-url2", "short_name": "exmpl2", "short_url": nil}}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestPaginationGetLinksRight2(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url', 'exmpl'), ('https://example.com/long-url1', 'exmpl1'), ('https://example.com/long-url2', 'exmpl2'), ('https://example.com/long-url3', 'exmpl3'), ('https://example.com/long-url4', 'exmpl4'), ('https://example.com/long-url5', 'exmpl5'), ('https://example.com/long-url6', 'exmpl6'), ('https://example.com/long-url7', 'exmpl7')")
-	assert.NoError(t, err)
-
 	// выполнение запроса
-	r, _ := http.NewRequest(http.MethodGet, "/api/links?range=[6,15]", nil)
+	r, _ := http.NewRequest(http.MethodGet, "/api/links?range=[5,15]", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response []map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := []map[string]any{{"id": float64(7), "original_url": "https://example.com/long-url6", "short_name": "exmpl6", "short_url": nil}, {"id": float64(8), "original_url": "https://example.com/long-url7", "short_name": "exmpl7", "short_url": nil}}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestPaginationGetLinksRight3(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url', 'exmpl'), ('https://example.com/long-url1', 'exmpl1'), ('https://example.com/long-url2', 'exmpl2'), ('https://example.com/long-url3', 'exmpl3'), ('https://example.com/long-url4', 'exmpl4'), ('https://example.com/long-url5', 'exmpl5'), ('https://example.com/long-url6', 'exmpl6'), ('https://example.com/long-url7', 'exmpl7')")
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	r, _ := http.NewRequest(http.MethodGet, "/api/links?range=[2, 2]", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response []map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	want := []map[string]any{{"id": float64(3), "original_url": "https://example.com/long-url2", "short_name": "exmpl2", "short_url": nil}}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	want := []map[string]any{{"id": float64(4), "original_url": "https://example.com/long-url3", "short_name": "exmpl3", "short_url": nil}}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestPaginationGetLinksWrong(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url', 'exmpl'), ('https://example.com/long-url1', 'exmpl1'), ('https://example.com/long-url2', 'exmpl2'), ('https://example.com/long-url3', 'exmpl3'), ('https://example.com/long-url4', 'exmpl4'), ('https://example.com/long-url5', 'exmpl5'), ('https://example.com/long-url6', 'exmpl6'), ('https://example.com/long-url7', 'exmpl7')")
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	r, _ := http.NewRequest(http.MethodGet, "/api/links?range=[15, 2]", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := map[string]any{"error": "range values are specified incorrectly"}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestPaginationGetLinksWrong2(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url', 'exmpl'), ('https://example.com/long-url1', 'exmpl1'), ('https://example.com/long-url2', 'exmpl2'), ('https://example.com/long-url3', 'exmpl3'), ('https://example.com/long-url4', 'exmpl4'), ('https://example.com/long-url5', 'exmpl5'), ('https://example.com/long-url6', 'exmpl6'), ('https://example.com/long-url7', 'exmpl7')")
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	r, _ := http.NewRequest(http.MethodGet, "/api/links?range=[a, 2]", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := map[string]any{"error": "the range must be specified by two numbers, example: [1,4]"}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestPaginationGetLinksWrong3(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url', 'exmpl'), ('https://example.com/long-url1', 'exmpl1'), ('https://example.com/long-url2', 'exmpl2'), ('https://example.com/long-url3', 'exmpl3'), ('https://example.com/long-url4', 'exmpl4'), ('https://example.com/long-url5', 'exmpl5'), ('https://example.com/long-url6', 'exmpl6'), ('https://example.com/long-url7', 'exmpl7')")
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	r, _ := http.NewRequest(http.MethodGet, "/api/links?range=[a, 2, 6, 7]", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := map[string]any{"error": "the range must be specified by two numbers, example: [1,4]"}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
-func TestLinkVisits(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM link_visits")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO link_visits (link_id, ip, user_agent, referer, status) VALUES (1, '192.168.10.1', 'chrome', 'www.yanex.ru', 302), (2, '192.168.10.2', 'chrome', 'www.mail.ru', 302), (3, '192.168.10.3', 'mozilla', 'www.vk.com', 302), (4, '192.168.10.4', 'opera', 'www.ya.ru', 302), (5, '192.168.10.5', 'chrome', 'www.rambler.ru', 302), (6, '192.168.10.6', 'opera', 'www.ersh.su', 302)")
-	assert.NoError(t, err)
-
-	// выполнение запроса
-	req, _ := http.NewRequest(http.MethodGet, "/api/link_visits", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	// проверка результатов
-	assert.Equal(t, http.StatusOK, w.Code)
-	var response []map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, 6, len(response))
-}
-
 func TestLinkVisitsPaginationRight(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM link_visits")
-	assert.NoError(t, err)
-
-	// Фиксируем точное время для теста
-	fixedTime := time.Date(2026, 5, 26, 12, 35, 0, 0, time.UTC)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO link_visits (link_id, ip, user_agent, referer, status, created_at) VALUES (1, '192.168.10.1', 'chrome', 'www.yanex.ru', 302, $1), (2, '192.168.10.2', 'chrome', 'www.mail.ru', 302, $1), (3, '192.168.10.3', 'mozilla', 'www.vk.com', 302, $1), (4, '192.168.10.4', 'opera', 'www.ya.ru', 302, $1), (5, '192.168.10.5', 'chrome', 'www.rambler.ru', 302, $1), (6, '192.168.10.6', 'opera', 'www.ersh.su', 302, $1)", fixedTime)
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	req, _ := http.NewRequest(http.MethodGet, "/api/link_visits?range=[1,2]", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response []map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := []map[string]any{{"id": float64(2), "link_id": float64(2), "ip": "192.168.10.2", "user_agent": "chrome", "status": float64(302), "created_at": "2026-05-26T12:35:00Z"}}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestLinkVisitsPaninationRight2(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM link_visits")
-	assert.NoError(t, err)
-
-	// Фиксируем точное время для теста
-	fixedTime := time.Date(2026, 5, 26, 12, 35, 0, 0, time.UTC)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO link_visits (link_id, ip, user_agent, referer, status, created_at) VALUES (1, '192.168.10.1', 'chrome', 'www.yanex.ru', 302, $1), (2, '192.168.10.2', 'chrome', 'www.mail.ru', 302, $1), (3, '192.168.10.3', 'mozilla', 'www.vk.com', 302, $1), (4, '192.168.10.4', 'opera', 'www.ya.ru', 302, $1), (5, '192.168.10.5', 'chrome', 'www.rambler.ru', 302, $1), (6, '192.168.10.6', 'opera', 'www.ersh.su', 302, $1)", fixedTime)
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	req, _ := http.NewRequest(http.MethodGet, "/api/link_visits?range=[5,20]", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response []map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := []map[string]any{{"id": float64(6), "link_id": float64(6), "ip": "192.168.10.6", "user_agent": "opera", "status": float64(302), "created_at": "2026-05-26T12:35:00Z"}}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestLinkVisitsPaninationRight3(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM link_visits")
-	assert.NoError(t, err)
-
-	// Фиксируем точное время для теста
-	fixedTime := time.Date(2026, 5, 26, 12, 35, 0, 0, time.UTC)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO link_visits (link_id, ip, user_agent, referer, status, created_at) VALUES (1, '192.168.10.1', 'chrome', 'www.yanex.ru', 302, $1), (2, '192.168.10.2', 'chrome', 'www.mail.ru', 302, $1), (3, '192.168.10.3', 'mozilla', 'www.vk.com', 302, $1), (4, '192.168.10.4', 'opera', 'www.ya.ru', 302, $1), (5, '192.168.10.5', 'chrome', 'www.rambler.ru', 302, $1), (6, '192.168.10.6', 'opera', 'www.ersh.su', 302, $1)", fixedTime)
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	req, _ := http.NewRequest(http.MethodGet, "/api/link_visits?range=[3,3]", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response []map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := []map[string]any{{"id": float64(4), "link_id": float64(4), "ip": "192.168.10.4", "user_agent": "opera", "status": float64(302), "created_at": "2026-05-26T12:35:00Z"}}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestLinkPaginationWrong(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM link_visits")
-	assert.NoError(t, err)
-
-	// Фиксируем точное время для теста
-	fixedTime := time.Date(2026, 5, 26, 12, 35, 0, 0, time.UTC)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO link_visits (link_id, ip, user_agent, referer, status, created_at) VALUES (1, '192.168.10.1', 'chrome', 'www.yanex.ru', 302, $1), (2, '192.168.10.2', 'chrome', 'www.mail.ru', 302, $1), (3, '192.168.10.3', 'mozilla', 'www.vk.com', 302, $1), (4, '192.168.10.4', 'opera', 'www.ya.ru', 302, $1), (5, '192.168.10.5', 'chrome', 'www.rambler.ru', 302, $1), (6, '192.168.10.6', 'opera', 'www.ersh.su', 302, $1)", fixedTime)
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	req, _ := http.NewRequest(http.MethodGet, "/api/link_visits?range=[5,1]", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := map[string]any{"error": "range values are specified incorrectly"}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestLinkPaginationWrong2(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM link_visits")
-	assert.NoError(t, err)
-
 	// выполнение запроса
 	req, _ := http.NewRequest(http.MethodGet, "/api/link_visits?range=[]", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := map[string]any{"error": "the range must be specified by two numbers, example: [1,4]"}
 	assert.NoError(t, err)
 	assert.Equal(t, want, response)
 }
 
 func TestRedirectRight(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url1', 'exmpl')")
-	assert.NoError(t, err)
-
-	req, _ := http.NewRequest("GET", "/r/exmpl", nil)
-
-	// выполняем запрос
+	// выполнение запроса
+	req, _ := http.NewRequest("GET", "/r/exmpl3", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверяем HTTP-статус
 	assert.Equal(t, http.StatusFound, w.Code)
-
 	// проверяем заголовок Location, куда перенаправляет сервер
-	assert.Equal(t, "https://example.com/long-url1", w.Header().Get("Location"))
+	assert.Equal(t, "https://example.com/long-url3", w.Header().Get("Location"))
 }
 
 func TestRedirectWrong(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url1', 'exmpl')")
-	assert.NoError(t, err)
-
+	// выполнение запроса
 	req, _ := http.NewRequest("GET", "/r/", nil)
-
-	// выполняем запрос
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверяем HTTP-статус
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestRedirectWrong2(t *testing.T) {
-	ctx := context.Background()
-	// очистка данных перед тестом
-	_, err := db.Exec(ctx, "DELETE FROM links")
-	assert.NoError(t, err)
-
-	// добавление тестовых данных
-	_, err = db.Exec(ctx, "INSERT INTO links (original_url, short_name) VALUES ('https://example.com/long-url1', 'exmpl')")
-	assert.NoError(t, err)
-
+	// выполнение запроса
 	req, _ := http.NewRequest("GET", "/r/noname", nil)
-
-	// выполняем запрос
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
 	// проверка результатов
 	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	want := map[string]any{"error of receiving the id and original url": "no rows in result set"}
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 	assert.NoError(t, err)
